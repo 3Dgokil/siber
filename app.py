@@ -68,41 +68,42 @@ if btn_start:
     elif st.session_state.streaming_process is not None:
         st.warning("⚠️ Live streaming saat ini sedang berjalan!")
     else:
-        st.info("⏳ Memproses link video dan mempersiapkan daftar putar di server cloud...")
+        st.info("⏳ Memproses link video dan membuat skrip loop internal...")
         
         # Proses konversi otomatis ke Direct Link
         direct_urls = [convert_to_direct_link(url) for url in raw_urls]
         
         playlist_path = "playlist_live.txt"
         try:
-            # Membuat format ffconcat version 1.0 yang didukung FFmpeg untuk remote stream
+            # Trik Rahasia Concat Looping: 
+            # Menggunakan header ffconcat version 1.0 dan memanggil file itu sendiri di akhir agar berputar selamanya
             with open(playlist_path, "w") as f:
                 f.write("ffconcat version 1.0\n")
                 for d_url in direct_urls:
                     f.write(f"file '{d_url}'\n")
+                # Baris sakti: memanggil dirinya sendiri agar looping tidak putus
+                f.write(f"file '{playlist_path}'\n")
             
-            # PERINTAH FFmpeg PERBAIKAN TOTAL:
-            # Menyertakan User-Agent agar Google Drive tidak memblokir koneksi server cloud
+            # PERINTAH FFmpeg FINAL DENGAN USER-AGENT BYPASS GOOGLE
             cmd = [
                 "ffmpeg", 
                 "-protocol_whitelist", "file,http,https,tcp,tls", 
                 "-user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "-re", 
                 "-f", "concat", 
                 "-safe", "0", 
                 "-i", playlist_path,
-                "-stream_loop", "-1",  # Menjalankan loop output setelah input dibaca
-                "-re", 
                 "-c:v", "libx264", "-preset", "veryfast", "-b:v", "2500k", "-maxrate", "2500k", "-bufsize", "5000k",
                 "-pix_fmt", "yuv420p", "-g", "60", 
                 "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
                 "-f", "flv", f"rtmp://://youtube.com{stream_key}"
             ]
             
-            # Jalankan FFmpeg di latar belakang server cloud agar web Streamlit tetap responsif
-            process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # Jalankan FFmpeg dan rekam jika terjadi error log
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             st.session_state.streaming_process = process
             
-            st.success("🎉 Perintah Live Streaming berhasil dikirim! Silakan pantau YouTube Studio Anda (tunggu 30-60 detik untuk sinkronisasi).")
+            st.success("🎉 Perintah dikirim! Sistem sedang menghubungkan video ke server YouTube...")
             st.balloons()
             st.rerun()
             
@@ -112,13 +113,30 @@ if btn_start:
 # LOGIKA HENTIKAN LIVE STREAM
 if btn_stop:
     if st.session_state.streaming_process is not None:
-        st.session_state.streaming_process.terminate()  # Mematikan proses FFmpeg dengan aman
+        st.session_state.streaming_process.terminate()  # Mematikan proses FFmpeg
         st.session_state.streaming_process = None
         
-        # Hapus file sampah daftar putar teks jika ada
+        # Hapus file daftar putar teks jika ada
         if os.path.exists("playlist_live.txt"):
             os.remove("playlist_live.txt")
             
         st.success("🛑 Live streaming telah dihentikan secara manual.")
         st.rerun()
-        
+
+st.markdown("---")
+# Papan Pemantau Log FFmpeg secara Real-time untuk mendeteksi pemblokiran Google Drive
+if st.session_state.streaming_process is not None:
+    st.subheader("📊 Pemantau Log FFmpeg Cloud")
+    st.caption("Jika live belum muncul di YT, cek pesan di bawah ini:")
+    
+    # Baca 5 baris log terakhir yang dikeluarkan oleh server
+    log_area = st.empty()
+    logs = ""
+    try:
+        for _ in range(5):
+            line = st.session_state.streaming_process.stdout.readline()
+            if line:
+                logs += line
+        log_area.code(logs)
+    except:
+        pass
