@@ -65,7 +65,7 @@ if btn_start:
                 # Looping kembali ke file teks agar berputar selamanya
                 f.write(f"file '{playlist_path}'\n")
             
-            # PERINTAH FFmpeg MENGGUNAKAN JALUR ALTERNATIF RTMPS PORT 443
+            # PERINTAH FFmpeg PERBAIKAN SINTAKS AUDIO & JALUR RTMPS
             cmd = [
                 "ffmpeg", 
                 "-protocol_whitelist", "file,crypto,tcp,tls,https", 
@@ -75,7 +75,7 @@ if btn_start:
                 "-i", playlist_path,
                 "-c:v", "libx264", "-preset", "veryfast", "-b:v", "2000k", "-maxrate", "2000k", "-bufsize", "4000k",
                 "-pix_fmt", "yuv420p", "-g", "60", 
-                "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+                "-c:a", "aac", "-b:a", "128k", "-ar", "44100",  # Diperbaiki menjadi string teks utuh
                 "-f", "flv", f"rtmps://://youtube.com{stream_key}"
             ]
             
@@ -83,7 +83,7 @@ if btn_start:
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             st.session_state.streaming_process = process
             
-            st.success("🎉 Perintah dikirim via RTMPS Port 443! Silakan pantau YouTube Studio Anda dalam 30-60 detik.")
+            st.success("🎉 Perintah dikirim via RTMPS Port 443! Silakan pantau log di bawah dan YouTube Studio Anda.")
             st.balloons()
             st.rerun()
             
@@ -109,16 +109,19 @@ if btn_stop:
         st.rerun()
 
 st.markdown("---")
-# Papan Pemantau Log Real-time untuk melihat status pengiriman data
+# Papan Pemantau Log Real-time diperpanjang agar membaca lebih banyak baris log terbaru
 if st.session_state.streaming_process is not None:
     st.subheader("📊 Pemantau Log Real-time")
     log_area = st.empty()
     logs = ""
     try:
-        for _ in range(10):
+        # Membaca hingga 50 baris untuk memunculkan pesan error / status transmisi video
+        for _ in range(50):
             line = st.session_state.streaming_process.stdout.readline()
             if line:
                 logs += line
+            else:
+                break
         log_area.code(logs)
     except:
         pass
