@@ -1,25 +1,11 @@
 import streamlit as st
 import subprocess
 import os
-import re
 
-# Setelan halaman dashboard Streamlit
-st.set_page_config(page_title="YT Multi-Video Live Streamer", page_icon="🎬", layout="centered")
+st.set_page_config(page_title="YT Local Multi-Video Live Streamer", page_icon="🎬", layout="centered")
 
-st.title("🎬 YouTube Loop Live Streamer")
-st.write("Alat live streaming 24 jam ke YouTube dengan memutar 6 video secara bergantian (looping).")
-
-# Fungsi otomatis untuk mengubah Link Google Drive biasa menjadi Direct Link FFmpeg
-def convert_to_direct_link(url):
-    url = url.strip()
-    if not url:
-        return ""
-    # Deteksi ID unik dari link Google Drive biasa maupun link download
-    match = re.search(r'(?:file/d/|id=)([\w-]+)', url)
-    if match:
-        video_id = match.group(1)
-        return f"https://google.com{video_id}"
-    return url  # Kembalikan url asli jika bukan link google drive
+st.title("🎬 YouTube Direct Upload Live Streamer")
+st.write("Live streaming 24 jam dengan mengunggah langsung file video dari HP/PC ke server Cloud.")
 
 # 1. Input Stream Key YouTube
 stream_key = st.text_input(
@@ -29,28 +15,22 @@ stream_key = st.text_input(
 )
 
 st.markdown("---")
-st.subheader("🔗 Masukkan Link Google Drive Video (Urutan 1 - 6)")
-st.caption("Salin langsung link dari Google Drive Anda (Pastikan aksesnya sudah diubah ke 'Siapa saja yang memiliki link').")
+st.subheader("📁 Unggah File Video Anda")
+st.caption("Pilih atau seret ke-6 file video .mp4 Anda sekaligus. Pastikan total ukuran tidak melebihi kapasitas server.")
 
-# 2. Input 6 Link URL Video (Cukup masukkan link Drive biasa)
-raw_urls = []
-for i in range(1, 7):
-    url = st.text_input(
-        f"Video {i} Google Drive Link:", 
-        placeholder="https://google.com", 
-        key=f"url_{i}"
-    )
-    raw_urls.append(url)
+# 2. Multi-file Uploader (Bisa pilih banyak video sekaligus)
+uploaded_files = st.file_uploader(
+    "Pilih file video (.mp4):", 
+    type=["mp4"], 
+    accept_multiple_files=True
+)
 
 st.markdown("---")
 
-# Cek status proses streaming di session state agar tombol sinkron
 if "streaming_process" not in st.session_state:
     st.session_state.streaming_process = None
 
-# Tata letak tombol aksi
 col1, col2 = st.columns(2)
-
 with col1:
     btn_start = st.button("🚀 Mulai Live Stream 24 Jam", use_container_width=True, type="primary")
 with col2:
@@ -58,37 +38,38 @@ with col2:
 
 # LOGIKA MULAI LIVE STREAM
 if btn_start:
-    # Validasi Input Kosong
-    empty_urls = [u for u in raw_urls if not u.strip()]
-    
     if not stream_key:
         st.error("❌ Stream Key wajib diisi!")
-    elif len(empty_urls) > 0:
-        st.error(f"❌ Harap isi semua 6 link video! Masih ada {len(empty_urls)} kolom kosong.")
+    elif not uploaded_files:
+        st.error("❌ Harap unggah video terlebih dahulu!")
     elif st.session_state.streaming_process is not None:
         st.warning("⚠️ Live streaming saat ini sedang berjalan!")
     else:
-        st.info("⏳ Memproses link video dan membuat skrip loop internal...")
+        st.info("⏳ Menyimpan file video ke server lokal cloud...")
         
-        # Proses konversi otomatis ke Direct Link
-        direct_urls = [convert_to_direct_link(url) for url in raw_urls]
-        
-        playlist_path = "playlist_live.txt"
+        # Simpan file yang diunggah ke penyimpanan lokal server cloud
+        video_paths = []
+        for i, uploaded_file in enumerate(uploaded_files):
+            # Beri nama urut sesuai urutan unggah (video_0.mp4, video_1.mp4, dst)
+            temp_path = f"local_video_{i}.mp4"
+            with open(temp_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            video_paths.append(temp_path)
+            
+        playlist_path = "playlist_local.txt"
         try:
-            # Trik Rahasia Concat Looping: 
-            # Menggunakan header ffconcat version 1.0 dan memanggil file itu sendiri di akhir agar berputar selamanya
+            # Membuat format ffconcat version 1.0 dengan trik loop internal mandiri
             with open(playlist_path, "w") as f:
                 f.write("ffconcat version 1.0\n")
-                for d_url in direct_urls:
-                    f.write(f"file '{d_url}'\n")
-                # Baris sakti: memanggil dirinya sendiri agar looping tidak putus
+                for path in video_paths:
+                    f.write(f"file '{path}'\n")
+                # Looping kembali ke file ini agar berputar 24 jam nonstop
                 f.write(f"file '{playlist_path}'\n")
             
-            # PERINTAH FFmpeg FINAL DENGAN USER-AGENT BYPASS GOOGLE
+            # PERINTAH FFmpeg UNTUK FILE LOKAL (Sangat Ringan & Stabil)
             cmd = [
                 "ffmpeg", 
-                "-protocol_whitelist", "file,http,https,tcp,tls", 
-                "-user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "-protocol_whitelist", "file,crypto,tcp", 
                 "-re", 
                 "-f", "concat", 
                 "-safe", "0", 
@@ -99,11 +80,11 @@ if btn_start:
                 "-f", "flv", f"rtmp://://youtube.com{stream_key}"
             ]
             
-            # Jalankan FFmpeg dan rekam jika terjadi error log
+            # Jalankan FFmpeg di latar belakang
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             st.session_state.streaming_process = process
             
-            st.success("🎉 Perintah dikirim! Sistem sedang menghubungkan video ke server YouTube...")
+            st.success("🎉 Sukses! Video berhasil dimuat secara lokal. Silakan cek YouTube Studio Anda dalam 30 detik.")
             st.balloons()
             st.rerun()
             
@@ -113,23 +94,25 @@ if btn_start:
 # LOGIKA HENTIKAN LIVE STREAM
 if btn_stop:
     if st.session_state.streaming_process is not None:
-        st.session_state.streaming_process.terminate()  # Mematikan proses FFmpeg
+        st.session_state.streaming_process.terminate()
         st.session_state.streaming_process = None
         
-        # Hapus file daftar putar teks jika ada
-        if os.path.exists("playlist_live.txt"):
-            os.remove("playlist_live.txt")
+        # Bersihkan file sampah video dan playlist di server
+        if os.path.exists("playlist_local.txt"):
+            os.remove("playlist_local.txt")
             
-        st.success("🛑 Live streaming telah dihentikan secara manual.")
+        # Cari dan hapus semua file video lokal sementara
+        for file in os.listdir("."):
+            if file.startswith("local_video_") and file.endswith(".mp4"):
+                os.remove(file)
+                
+        st.success("🛑 Live streaming telah dihentikan dan file sampah dibersihkan.")
         st.rerun()
 
 st.markdown("---")
-# Papan Pemantau Log FFmpeg secara Real-time untuk mendeteksi pemblokiran Google Drive
+# Papan Pemantau Log Real-time
 if st.session_state.streaming_process is not None:
-    st.subheader("📊 Pemantau Log FFmpeg Cloud")
-    st.caption("Jika live belum muncul di YT, cek pesan di bawah ini:")
-    
-    # Baca 5 baris log terakhir yang dikeluarkan oleh server
+    st.subheader("📊 Pemantau Log Real-time")
     log_area = st.empty()
     logs = ""
     try:
