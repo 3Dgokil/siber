@@ -2,10 +2,10 @@ import streamlit as st
 import subprocess
 import os
 
-st.set_page_config(page_title="YT Step-by-Step Live Streamer", page_icon="🎬", layout="centered")
+st.set_page_config(page_title="YT Cloud RTMPS Streamer", page_icon="🎬", layout="centered")
 
-st.title("🎬 YouTube Step-by-Step Live Streamer")
-st.write("Unggah video satu per satu secara bertahap agar proses upload lebih ringan dan stabil.")
+st.title("🎬 YouTube Cloud RTMPS Streamer")
+st.write("Mencoba bypass blokir port server cloud menggunakan jalur aman RTMPS Port 443.")
 
 # 1. Input Stream Key YouTube
 stream_key = st.text_input(
@@ -16,9 +16,9 @@ stream_key = st.text_input(
 
 st.markdown("---")
 st.subheader("📁 Unggah Video Secara Bergantian (Maksimal 6 Video)")
-st.caption("Unggah video satu per satu. Setelah indikator upload Video 1 selesai (100%), baru lanjutkan ke Video berikutnya.")
+st.caption("Unggah video satu per satu. Pastikan status upload per video sudah selesai (100%) baru lanjut ke slot berikutnya.")
 
-# Membuat 6 kolom upload mandiri (satu per one)
+# Membuat 6 kolom upload mandiri
 uploaded_files = []
 for i in range(1, 7):
     file = st.file_uploader(f"🎬 Unggah Video {i} (.mp4):", type=["mp4"], key=f"upload_slot_{i}")
@@ -47,7 +47,7 @@ if btn_start:
     else:
         st.info(f"⏳ Menyimpan {len(uploaded_files)} file video secara bertahap ke server cloud...")
         
-        # Simpan file yang terkumpul di memori ke penyimpanan fisik server cloud
+        # Simpan file dari memori ke penyimpanan fisik server cloud
         video_paths = []
         for index, uploaded_file in enumerate(uploaded_files):
             temp_path = f"local_video_{index}.mp4"
@@ -65,25 +65,25 @@ if btn_start:
                 # Looping kembali ke file teks agar berputar selamanya
                 f.write(f"file '{playlist_path}'\n")
             
-            # PERINTAH FFmpeg UNTUK FILE LOKAL SERVER
+            # PERINTAH FFmpeg MENGGUNAKAN JALUR ALTERNATIF RTMPS PORT 443
             cmd = [
                 "ffmpeg", 
-                "-protocol_whitelist", "file,crypto,tcp", 
+                "-protocol_whitelist", "file,crypto,tcp,tls,https", 
                 "-re", 
                 "-f", "concat", 
                 "-safe", "0", 
                 "-i", playlist_path,
-                "-c:v", "libx264", "-preset", "veryfast", "-b:v", "2500k", "-maxrate", "2500k", "-bufsize", "5000k",
+                "-c:v", "libx264", "-preset", "veryfast", "-b:v", "2000k", "-maxrate", "2000k", "-bufsize", "4000k",
                 "-pix_fmt", "yuv420p", "-g", "60", 
                 "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
-                "-f", "flv", f"rtmp://://youtube.com{stream_key}"
+                "-f", "flv", f"rtmps://://youtube.com{stream_key}"
             ]
             
             # Jalankan FFmpeg di latar belakang server cloud
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             st.session_state.streaming_process = process
             
-            st.success(f"🎉 Sukses memproses {len(uploaded_files)} video! Silakan cek YouTube Studio Anda dalam 30 detik.")
+            st.success("🎉 Perintah dikirim via RTMPS Port 443! Silakan pantau YouTube Studio Anda dalam 30-60 detik.")
             st.balloons()
             st.rerun()
             
@@ -109,13 +109,13 @@ if btn_stop:
         st.rerun()
 
 st.markdown("---")
-# Papan Pemantau Log Real-time
+# Papan Pemantau Log Real-time untuk melihat status pengiriman data
 if st.session_state.streaming_process is not None:
     st.subheader("📊 Pemantau Log Real-time")
     log_area = st.empty()
     logs = ""
     try:
-        for _ in range(5):
+        for _ in range(10):
             line = st.session_state.streaming_process.stdout.readline()
             if line:
                 logs += line
