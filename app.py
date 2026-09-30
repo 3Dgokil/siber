@@ -2,10 +2,10 @@ import streamlit as st
 import subprocess
 import os
 
-st.set_page_config(page_title="YT Local Multi-Video Live Streamer", page_icon="🎬", layout="centered")
+st.set_page_config(page_title="YT Step-by-Step Live Streamer", page_icon="🎬", layout="centered")
 
-st.title("🎬 YouTube Direct Upload Live Streamer")
-st.write("Live streaming 24 jam dengan mengunggah langsung file video dari HP/PC ke server Cloud.")
+st.title("🎬 YouTube Step-by-Step Live Streamer")
+st.write("Unggah video satu per satu secara bertahap agar proses upload lebih ringan dan stabil.")
 
 # 1. Input Stream Key YouTube
 stream_key = st.text_input(
@@ -15,15 +15,15 @@ stream_key = st.text_input(
 )
 
 st.markdown("---")
-st.subheader("📁 Unggah File Video Anda")
-st.caption("Pilih atau seret ke-6 file video .mp4 Anda sekaligus. Pastikan total ukuran tidak melebihi kapasitas server.")
+st.subheader("📁 Unggah Video Secara Bergantian (Maksimal 6 Video)")
+st.caption("Unggah video satu per satu. Setelah indikator upload Video 1 selesai (100%), baru lanjutkan ke Video berikutnya.")
 
-# 2. Multi-file Uploader (Bisa pilih banyak video sekaligus)
-uploaded_files = st.file_uploader(
-    "Pilih file video (.mp4):", 
-    type=["mp4"], 
-    accept_multiple_files=True
-)
+# Membuat 6 kolom upload mandiri (satu per one)
+uploaded_files = []
+for i in range(1, 7):
+    file = st.file_uploader(f"🎬 Unggah Video {i} (.mp4):", type=["mp4"], key=f"upload_slot_{i}")
+    if file is not None:
+        uploaded_files.append(file)
 
 st.markdown("---")
 
@@ -40,33 +40,32 @@ with col2:
 if btn_start:
     if not stream_key:
         st.error("❌ Stream Key wajib diisi!")
-    elif not uploaded_files:
-        st.error("❌ Harap unggah video terlebih dahulu!")
+    elif len(uploaded_files) == 0:
+        st.error("❌ Minimal unggah 1 video terlebih dahulu!")
     elif st.session_state.streaming_process is not None:
         st.warning("⚠️ Live streaming saat ini sedang berjalan!")
     else:
-        st.info("⏳ Menyimpan file video ke server lokal cloud...")
+        st.info(f"⏳ Menyimpan {len(uploaded_files)} file video secara bertahap ke server cloud...")
         
-        # Simpan file yang diunggah ke penyimpanan lokal server cloud
+        # Simpan file yang terkumpul di memori ke penyimpanan fisik server cloud
         video_paths = []
-        for i, uploaded_file in enumerate(uploaded_files):
-            # Beri nama urut sesuai urutan unggah (video_0.mp4, video_1.mp4, dst)
-            temp_path = f"local_video_{i}.mp4"
+        for index, uploaded_file in enumerate(uploaded_files):
+            temp_path = f"local_video_{index}.mp4"
             with open(temp_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
             video_paths.append(temp_path)
             
         playlist_path = "playlist_local.txt"
         try:
-            # Membuat format ffconcat version 1.0 dengan trik loop internal mandiri
+            # Membuat format ffconcat dengan trik loop internal mandiri
             with open(playlist_path, "w") as f:
                 f.write("ffconcat version 1.0\n")
                 for path in video_paths:
                     f.write(f"file '{path}'\n")
-                # Looping kembali ke file ini agar berputar 24 jam nonstop
+                # Looping kembali ke file teks agar berputar selamanya
                 f.write(f"file '{playlist_path}'\n")
             
-            # PERINTAH FFmpeg UNTUK FILE LOKAL (Sangat Ringan & Stabil)
+            # PERINTAH FFmpeg UNTUK FILE LOKAL SERVER
             cmd = [
                 "ffmpeg", 
                 "-protocol_whitelist", "file,crypto,tcp", 
@@ -80,11 +79,11 @@ if btn_start:
                 "-f", "flv", f"rtmp://://youtube.com{stream_key}"
             ]
             
-            # Jalankan FFmpeg di latar belakang
+            # Jalankan FFmpeg di latar belakang server cloud
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             st.session_state.streaming_process = process
             
-            st.success("🎉 Sukses! Video berhasil dimuat secara lokal. Silakan cek YouTube Studio Anda dalam 30 detik.")
+            st.success(f"🎉 Sukses memproses {len(uploaded_files)} video! Silakan cek YouTube Studio Anda dalam 30 detik.")
             st.balloons()
             st.rerun()
             
@@ -97,16 +96,16 @@ if btn_stop:
         st.session_state.streaming_process.terminate()
         st.session_state.streaming_process = None
         
-        # Bersihkan file sampah video dan playlist di server
+        # Bersihkan file sampah teks playlist
         if os.path.exists("playlist_local.txt"):
             os.remove("playlist_local.txt")
             
-        # Cari dan hapus semua file video lokal sementara
+        # Cari dan hapus semua file video lokal sementara di server
         for file in os.listdir("."):
             if file.startswith("local_video_") and file.endswith(".mp4"):
                 os.remove(file)
                 
-        st.success("🛑 Live streaming telah dihentikan dan file sampah dibersihkan.")
+        st.success("🛑 Live streaming dihentikan dan semua file video di server telah dihapus.")
         st.rerun()
 
 st.markdown("---")
